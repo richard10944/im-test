@@ -11,7 +11,8 @@ import {
  * 生成单个消息发送脚本
  */
 function generateMessageScript(user: AuthResult, targetUid: string, fileIndex: number): string {
-    return `// 自动生成的消息发送脚本 - 用户 ${fileIndex + 1}
+    const formattedIndex = (fileIndex + 1).toString().padStart(2, '0');
+    return `// 自动生成的消息发送脚本 - 用户 ${formattedIndex}
 import { MessageText, Channel, WKSDK, ChannelTypePerson, ConnectStatus } from "wukongimjssdk";
 
 // 服务器配置
@@ -64,9 +65,6 @@ const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 `;
 }
 
-/**
- * 直接生成所有消息发送脚本（不需要中间token文件）
- */
 async function generateMessageScriptsDirect(
     excelFilePath: string,
     outputDir: string = './message_scripts',
@@ -126,14 +124,15 @@ async function generateMessageScriptsDirect(
             // 生成脚本内容
             const scriptContent = generateMessageScript(user, targetUid, i);
 
-            // 写入文件
-            const fileName = `main${i}.ts`;
+            // 🎯 修改这里：使用 padStart 格式化为两位数
+            const fileName = `main${i.toString().padStart(2, '0')}.ts`;
             const filePath = path.join(outputDir, fileName);
 
             fs.writeFileSync(filePath, scriptContent, 'utf8');
             generatedFiles.push(filePath);
 
-            console.log(`生成脚本: ${fileName} - 用户 ${senderStartIndex + i + 1} (${user.uid.slice(0, 8)}...)`);
+            // 🎯 同时修改日志输出中的序号显示
+            console.log(`生成脚本: ${fileName} - 用户 ${(senderStartIndex + i + 1).toString().padStart(2, '0')} (${user.uid.slice(0, 8)}...)`);
         }
 
         console.log(`成功生成 ${generatedFiles.length} 个消息发送脚本到目录: ${outputDir}`);
@@ -149,9 +148,9 @@ async function customGenerate() {
     try {
         await generateMessageScriptsDirect(
             './test_accounts.xlsx',
-            './src',
+            './cmd',
             1,
-            3,
+            12,
             0
         );
     } catch (error) {

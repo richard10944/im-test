@@ -353,10 +353,10 @@ async function sendFriendRequest(
 
         const raw = JSON.stringify({
             "to_uid": target.uid,
-            "remark": `${options.remark} (来自用户${authUser.uid.slice(0, 8)}...)`,
+            "remark": `${options.remark} (来自用户${authUser.uid}...)`,
             "vercode": target.vercode,
             "friend_group_id": options.friendGroupId,
-            "remark_name": `${options.remarkName}_${target.uid.slice(0, 6)}`
+            "remark_name": `${options.remarkName}_${target.uid}`
         });
 
         const requestOptions: RequestInit = {
