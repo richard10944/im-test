@@ -1,9 +1,11 @@
 import * as XLSX from 'xlsx';
 import * as fs from 'fs';
+import * as crypto from 'crypto';
+import * as path from 'path';
+const baseUrl = "http://localhost:8090/v1"
 
-const baseUrl="http://localhost:8090/v1"
-
-const wsUrl="ws://localhost:5200/"
+const wsUrl = "ws://localhost:5200/"
+const uploadUrl = "http://localhost:9000"
 // 定义类型
 interface UserCredentials {
     username: string;
@@ -36,14 +38,6 @@ interface UserInfo {
     vercode: string;
 }
 
-interface FriendApplyRequest {
-    to_uid: string;
-    remark: string;
-    vercode: string;
-    friend_group_id: number;
-    remark_name: string;
-}
-
 interface ApplyResult {
     authUid: string;
     targetUid: string;
@@ -62,6 +56,17 @@ interface TokenFile {
     users: UserTokenInfo[];
     total: number;
     generatedAt: string;
+}
+
+interface UploadResponse {
+    upload_url: string;
+    path: string;
+    fileHash: string;
+}
+
+interface ApiResponse {
+    upload_url: string;
+    path: string;
 }
 
 
@@ -520,6 +525,184 @@ async function getUserTokensAndSave(
     }
 }
 
+/**
+ * 计算文件的SHA256哈希值
+ */
+async function calculateFileHash(filePath: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const hash = crypto.createHash('sha256');
+        const stream = fs.createReadStream(filePath);
+
+        stream.on('data', (data) => hash.update(data));
+        stream.on('end', () => resolve(hash.digest('hex')));
+        stream.on('error', (error) => reject(error));
+    });
+}
+
+/**
+ * 获取文件大小
+ */
+async function getFileSize(filePath: string): Promise<number> {
+    return new Promise((resolve, reject) => {
+        fs.stat(filePath, (err, stats) => {
+            if (err) reject(err);
+            else resolve(stats.size);
+        });
+    });
+}
+
+/**
+ * 获取文件上传预签名URL
+ * @param filePath 文件路径
+ * @returns 上传URL和路径信息
+ */
+async function getFileUploadUrl(filePath: string, token: string): Promise<UploadResponse> {
+    try {
+        // 验证文件是否存在
+        if (!fs.existsSync(filePath)) {
+            throw new Error(`文件不存在: ${filePath}`);
+        }
+
+        // 并行计算文件哈希和大小
+        const [filehash, filesize] = await Promise.all([
+            calculateFileHash(filePath),
+            getFileSize(filePath)
+        ]);
+
+        // 获取文件后缀
+        const filesuffix = path.extname(filePath).replace('.', '') || 'file';
+
+        const requestBody = {
+            endpoint_url: uploadUrl,
+            filehash: filehash,
+            filesize: filesize.toString(),
+            filesuffix: filesuffix
+        };
+        console.log(requestBody)
+        const myHeaders = new Headers();
+        myHeaders.append("Content-Type", "application/json");
+        myHeaders.append("token", token);
+
+        const requestOptions: RequestInit = {
+            method: 'POST',
+            headers: myHeaders,
+            body: JSON.stringify(requestBody),
+            redirect: 'follow'
+        };
+
+        const response = await fetch(`${baseUrl}/file/upload/presigned_checksum`, requestOptions);
+
+        if (!response.ok) {
+            throw new Error(`HTTP错误! 状态: ${response.status}`);
+        }
+
+        const result: ApiResponse = await response.json();
+
+        return {
+            upload_url: result.upload_url,
+            path: result.path,
+            fileHash:filehash
+        };
+
+    } catch (error) {
+        console.error('获取上传URL失败:', error);
+        throw error;
+    }
+}
+
+/**
+ * 获取文件MIME类型
+ */
+function getFileMimeType(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeMap: { [key: string]: string } = {
+    '.txt': 'text/plain',
+    '.html': 'text/html',
+    '.css': 'text/css',
+    '.js': 'application/javascript',
+    '.json': 'application/json',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.webp':"image/webp",
+    '.gif': 'image/gif',
+    '.pdf': 'application/pdf',
+    '.zip': 'application/zip',
+    '.mp4': 'video/mp4',
+    '.mp3': 'audio/mpeg',
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.xls': 'application/vnd.ms-excel',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  };
+  return mimeMap[ext] || 'application/octet-stream';
+}
+
+/**
+ * 使用PUT方法上传文件到预签名URL
+ */
+async function uploadFileToPresignedUrl(filePath: string,fileHash:string, uploadUrl: string): Promise<void> {
+    try {
+        console.log(filePath)
+        // 读取文件内容
+        const fileBuffer = await fs.promises.readFile(filePath);
+        const fileSize = (await fs.promises.stat(filePath)).size;
+        const mimeType = getFileMimeType(filePath);
+        console.log(mimeType)
+        const uploadOptions: RequestInit = {
+            method: 'PUT',
+            headers: {
+                'Content-Type':mimeType,
+                'Content-Length': fileSize.toString(),
+                'X-Amz-Content-Sha256':fileHash
+            },
+            body: fileBuffer,
+        };
+
+        console.log(`开始上传文件: ${filePath} (${fileSize} bytes)`);
+
+        const response = await fetch(uploadUrl, uploadOptions);
+
+        if (!response.ok) {
+            throw new Error(`文件上传失败! 状态: ${response.status}, 原因: ${response.statusText}`);
+        }
+
+        console.log('文件上传成功!');
+
+    } catch (error) {
+        console.error('上传文件失败:', error);
+        throw error;
+    }
+}
+
+/**
+ * 完整的文件上传流程
+ * 1. 获取预签名URL
+ * 2. 使用PUT方法上传文件
+ */
+async function uploadFile(filePath: string, token: string): Promise<UploadResponse> {
+    try {
+        console.log('开始文件上传流程...');
+
+        // 步骤1: 获取预签名URL
+        console.log('正在获取上传URL...');
+        const uploadInfo = await getFileUploadUrl(filePath, token);
+        console.log('获取上传URL成功:', uploadInfo.upload_url);
+        if (uploadInfo.upload_url != "") {
+            // 步骤2: 上传文件
+            console.log('正在上传文件...');
+            console.log(uploadInfo.upload_url)
+            await uploadFileToPresignedUrl(filePath,uploadInfo.fileHash,uploadInfo.upload_url);
+            console.log('文件上传流程完成!');
+        }
+        return uploadInfo;
+
+    } catch (error) {
+        console.error('文件上传流程失败:', error);
+        throw error;
+    }
+}
+
 // 导出供其他模块使用
 export {
     readUserCredentialsFromExcel,
@@ -533,4 +716,7 @@ export {
     UserCredentials,
     AuthResult,
     wsUrl,
+    uploadFileToPresignedUrl,
+    getFileUploadUrl,uploadFile,
+    UploadResponse
 };

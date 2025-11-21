@@ -14,7 +14,14 @@ import {
 function generateMessageScript(user: AuthResult, targetUid: string, fileIndex: number): string {
     const formattedIndex = (fileIndex + 1).toString().padStart(2, '0');
     return `// 自动生成的消息发送脚本 - 用户 ${formattedIndex}
-import { MessageText, Channel, WKSDK, ChannelTypePerson, ConnectStatus } from "wukongimjssdk";
+import { MessageText, Channel, WKSDK, ChannelTypePerson, ConnectStatus, MessageImage } from "wukongimjssdk";
+import { uploadFile } from "../src/apis";
+import WebPGenerator from '../src/webp-generator';
+import * as fs from 'fs';
+
+if (!fs.existsSync('./output')) {
+    fs.mkdirSync('./output', { recursive: true });
+}
 
 // 服务器配置
 WKSDK.shared().config.addr = '${wsUrl}';
@@ -44,10 +51,29 @@ WKSDK.shared().connectManager.addConnectStatusListener(
 
 // 异步发送消息
 async function sendMessages() {
+    let i = 0;
     while (true) {
         const text = new MessageText(randomString(500, charset));
         await WKSDK.shared().chatManager.send(text, new Channel(targetChannel, channelType));
-        await sleep(5000);
+        await sleep(3000);
+        i++;
+        if (i == 5) {
+            i = 0;
+            const filePath = \`./output/\${uid}.webp\`; // 替换为实际文件路径
+            await WebPGenerator.generateRandomWebP(filePath, {
+                minSizeKB: 50,
+                maxSizeKB: 200,
+                width: 800,
+                height: 600,
+                quality: 80,
+            });
+            const result = await uploadFile(filePath, token)
+            const image = new MessageImage()
+            image.width = 800
+            image.height = 600
+            image.url = result.path
+            await WKSDK.shared().chatManager.send(image, new Channel(targetChannel, channelType));
+        }
     }
 }
 
@@ -204,9 +230,9 @@ async function customGenerate() {
             './test_accounts.xlsx',
             './cmd',
             1,   // 从第2个用户开始
-            100, // 总共100个发送者
+            100, // 总共50个发送者
             0,   // 目标用户是第1个用户
-            20   // 新增参数：只有前30个脚本发送消息，其他70个只建立连接
+            10   // 新增参数：只有前30个脚本发送消息，其他70个只建立连接
         );
     } catch (error) {
         console.error('生成失败:', error);

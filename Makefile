@@ -75,6 +75,7 @@ clean: check-env
 	pm2 delete all 
 	rm -rf cmd
 	rm -rf logs
+	rm -rf output
 	@echo -e "${GREEN}清理完成${NC}"
 
 # 保存当前配置
