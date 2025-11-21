@@ -1,5 +1,5 @@
 module.exports = {
-  apps: Array.from({ length: 100 }, (_, i) => {
+  apps: Array.from({ length: 98 }, (_, i) => {
     const num = i.toString().padStart(2, '0');
     return {
       name: `main-${num}`,

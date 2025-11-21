@@ -11,6 +11,9 @@ importers:
       '@types/node':
         specifier: ^24.10.1
         version: 24.10.1
+      p-limit:
+        specifier: ^7.2.0
+        version: 7.2.0
       sharp:
         specifier: ^0.34.5
         version: 0.34.5
@@ -285,6 +288,10 @@ packages:
   md5-typescript@1.0.5:
     resolution: {integrity: sha512-ovAc4EtiNt2dY8JPhPr/wkC9h4U5k/nuClNVcG0Ga3V1rMlYpAY24ZaaymFXJlz+ccJ6UMPo3FSaVKe7czBsXw==}
 
+  p-limit@7.2.0:
+    resolution: {integrity: sha512-ATHLtwoTNDloHRFFxFJdHnG6n2WUeFjaR8XQMFdKIv0xkXjrER8/iG9iu265jOM95zXHAfv9oTkqhrfbIzosrQ==}
+    engines: {node: '>=20'}
+
   semver@7.7.3:
     resolution: {integrity: sha512-SdsKMrI9TdgjdweUSR9MweHA4EJ8YxHn8DFaDisvhVlUOe4BF1tLD7GAj0lIqWVl+dPb/rExr0Btby5loQm20Q==}
     engines: {node: '>=10'}
@@ -345,6 +352,10 @@ packages:
   yn@3.1.1:
     resolution: {integrity: sha512-Ux4ygGWsu2c7isFWe8Yu1YluJmqVhxqK2cLXNQA5AcC3QfbGNpM7fu0Y8b/z16pXLnFxZYvWhd3fhBY9DLmC6Q==}
     engines: {node: '>=6'}
+
+  yocto-queue@1.2.2:
+    resolution: {integrity: sha512-4LCcse/U2MHZ63HAJVE+v71o7yOdIe4cZ70Wpf8D/IyjDKYQLV5GD46B+hSTjJsvV5PztjvHoU580EftxjDZFQ==}
+    engines: {node: '>=12.20'}
 
 snapshots:
 
@@ -534,6 +545,10 @@ snapshots:
 
   md5-typescript@1.0.5: {}
 
+  p-limit@7.2.0:
+    dependencies:
+      yocto-queue: 1.2.2
+
   semver@7.7.3: {}
 
   sharp@0.34.5:
@@ -623,3 +638,5 @@ snapshots:
       word: 0.3.0
 
   yn@3.1.1: {}
+
+  yocto-queue@1.2.2: {}

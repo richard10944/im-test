@@ -164,7 +164,7 @@ async function generateMessageScriptsDirect(
 
         // 获取目标用户的UID
         console.log('获取目标用户信息...');
-        const targetUserInfo = await batchGetUserInfo([allUsers[targetUserIndex]]);
+        const targetUserInfo = await batchGetUserInfo([allUsers[targetUserIndex]],20);
         if (targetUserInfo.length === 0) {
             throw new Error('无法获取目标用户信息');
         }
@@ -178,7 +178,7 @@ async function generateMessageScriptsDirect(
 
         // 批量登录发送者用户
         console.log('登录发送者用户...');
-        const loginResults = await batchLoginFromExcel(senderUsers);
+        const loginResults = await batchLoginFromExcel(senderUsers,10);
         console.log(`登录成功: ${loginResults.length}/${senderUsers.length} 个用户`);
 
         if (loginResults.length === 0) {

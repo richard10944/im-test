@@ -2,10 +2,13 @@ import * as XLSX from 'xlsx';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
 import * as path from 'path';
+import pLimit from 'p-limit';
+
 const baseUrl = "http://localhost:8090/v1"
 
 const wsUrl = "ws://localhost:5200/"
 const uploadUrl = "http://localhost:9000"
+
 // 定义类型
 interface UserCredentials {
     username: string;
@@ -134,12 +137,16 @@ interface AuthResult {
 }
 
 // 完整的批量登录方法（整合Excel读取）
-async function batchLoginFromExcel(users: UserCredentials[]): Promise<AuthResult[]> {
-    try {
-        console.log('开始批量登录...');
+async function batchLoginFromExcel(users: UserCredentials[], concurrency: number = 10): Promise<AuthResult[]> {
+    const limit = pLimit(concurrency);
+    
+    console.log(`开始批量登录 ${users.length} 个用户，并发数: ${concurrency}`);
 
-        const loginPromises = users.map(async (user) => {
+    const promises = users.map((user, index) => 
+        limit(async () => {
             try {
+                console.log(`正在登录第 ${index + 1}/${users.length} 个用户: ${user.username}`);
+                
                 const myHeaders = new Headers();
                 myHeaders.append("Content-Type", "application/json");
 
@@ -153,7 +160,8 @@ async function batchLoginFromExcel(users: UserCredentials[]): Promise<AuthResult
                     method: 'POST',
                     headers: myHeaders,
                     body: raw,
-                    redirect: 'follow'
+                    redirect: 'follow',
+                    signal: AbortSignal.timeout(10000)
                 };
 
                 const response = await fetch(`${baseUrl}/user/login`, requestOptions);
@@ -164,28 +172,32 @@ async function batchLoginFromExcel(users: UserCredentials[]): Promise<AuthResult
 
                 const result = await response.json();
 
-                return {
-                    uid: result.uid,
-                    token: result.token
-                };
+                if (result.uid && result.token) {
+                    console.log(`✓ 用户 ${user.username} 登录成功`);
+                    return {
+                        uid: result.uid,
+                        token: result.token
+                    };
+                } else {
+                    throw new Error('响应中缺少uid或token');
+                }
             } catch (error) {
-                console.error(`用户 ${user.username} 登录失败:`, error);
+                console.error(`✗ 用户 ${user.username} 登录失败:`, error);
                 return null;
             }
-        });
+        })
+    );
 
-        const results = await Promise.all(loginPromises);
+    const results = await Promise.allSettled(promises);
+    
+    const successfulLogins = results
+        .filter((result): result is PromiseFulfilledResult<AuthResult | null> => 
+            result.status === 'fulfilled' && result.value !== null
+        )
+        .map(result => result.value!);
 
-        // 过滤掉失败的登录
-        const successfulLogins = results.filter((result): result is { uid: string; token: string } => result !== null);
-
-        console.log(`批量登录完成: ${successfulLogins.length}/${users.length} 成功`);
-        return successfulLogins;
-
-    } catch (error) {
-        console.error('批量登录过程出错:', error);
-        throw error;
-    }
+    console.log(`批量登录完成: ${successfulLogins.length}/${users.length} 成功`);
+    return successfulLogins;
 }
 
 /**
@@ -193,55 +205,54 @@ async function batchLoginFromExcel(users: UserCredentials[]): Promise<AuthResult
  * @param users 用户凭证数组
  * @returns 包含uid和vercode的用户信息数组
  */
-async function batchGetUserInfo(users: UserCredentials[]): Promise<UserInfo[]> {
-    const results: UserInfo[] = [];
+async function batchGetUserInfo(users: UserCredentials[], concurrency: number = 10): Promise<UserInfo[]> {
+  // 限制并发数为15
+  const limit = pLimit(concurrency);
+  
+  const requestOptions: RequestInit = {
+    method: 'GET',
+    redirect: 'follow' as RequestRedirect,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Accept': 'application/json, text/plain, */*',
+    },
+    signal: AbortSignal.timeout(8000)
+  };
 
-    // 使用Promise.all并发请求
-    const promises = users.map(async (user) => {
-        try {
-            const requestOptions: RequestInit = {
-                method: 'GET',
-                redirect: 'follow' as RequestRedirect
-            };
+  const promises = users.map((user) => 
+    limit(async () => {
+      try {
+        const url = `${baseUrl}/user/search?keyword=${encodeURIComponent(user.username)}`;
+        const response = await fetch(url, requestOptions);
 
-            // 构建请求URL，将username作为keyword参数
-            const url = `${baseUrl}/user/search?keyword=${encodeURIComponent(user.username)}`;
-
-            const response = await fetch(url, requestOptions);
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const result: UserSearchResponse = await response.json();
-
-            // 只有当用户存在时才添加到结果中
-            if (result.exist === 1 && result.data) {
-                return {
-                    uid: result.data.uid,
-                    vercode: result.data.vercode
-                };
-            } else {
-                console.warn(`用户 ${user.username} 不存在或查询失败`);
-                return null;
-            }
-        } catch (error) {
-            console.error(`获取用户 ${user.username} 信息失败:`, error);
-            return null;
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-    });
 
-    // 等待所有请求完成
-    const settledResults = await Promise.allSettled(promises);
+        const result: UserSearchResponse = await response.json();
 
-    // 过滤出成功的结果
-    settledResults.forEach((result) => {
-        if (result.status === 'fulfilled' && result.value !== null) {
-            results.push(result.value);
+        if (result.exist === 1 && result.data) {
+          return {
+            uid: result.data.uid,
+            vercode: result.data.vercode
+          };
+        } else {
+          console.warn(`用户 ${user.username} 不存在或查询失败`);
+          return null;
         }
-    });
+      } catch (error) {
+        console.error(`获取用户 ${user.username} 信息失败:`, error);
+        return null;
+      }
+    })
+  );
 
-    return results;
+  const settledResults = await Promise.allSettled(promises);
+  return settledResults
+    .filter((result): result is PromiseFulfilledResult<UserInfo> => 
+      result.status === 'fulfilled' && result.value !== null
+    )
+    .map(result => result.value);
 }
 
 /**
@@ -421,42 +432,63 @@ async function batchAddFriendsConcurrent(
         concurrency = 5
     } = options;
 
-    const allTasks: Array<{ authUser: AuthResult; target: UserInfo }> = [];
-
+    const limit = pLimit(concurrency);
+    
     // 生成所有任务
+    const allTasks: Array<{ authUser: AuthResult; target: UserInfo; taskId: number }> = [];
+    let taskId = 1;
+
     for (const authUser of authUsers) {
         const validTargets = targetUsers.filter(target => target.uid !== authUser.uid);
         for (const target of validTargets) {
-            allTasks.push({ authUser, target });
+            allTasks.push({ authUser, target, taskId: taskId++ });
         }
     }
 
-    const results: ApplyResult[] = [];
-    const batches = [];
+    console.log(`开始批量添加好友，总任务数: ${allTasks.length}，并发数: ${concurrency}`);
 
-    // 分批处理
-    for (let i = 0; i < allTasks.length; i += concurrency) {
-        batches.push(allTasks.slice(i, i + concurrency));
-    }
-
-    for (const batch of batches) {
-        const batchPromises = batch.map(({ authUser, target }) =>
-            sendFriendRequest(authUser, target, { remark, friendGroupId, remarkName })
-        );
-
-        const batchResults = await Promise.allSettled(batchPromises);
-
-        batchResults.forEach(result => {
-            if (result.status === 'fulfilled') {
-                results.push(result.value);
+    const promises = allTasks.map(({ authUser, target, taskId }) => 
+        limit(async () => {
+            try {
+                console.log(`[任务 ${taskId}/${allTasks.length}] 用户 ${authUser.uid} 正在添加 ${target.uid}`);
+                
+                const result = await sendFriendRequest(authUser, target, { 
+                    remark, 
+                    friendGroupId, 
+                    remarkName 
+                });
+                
+                if (result.success) {
+                    console.log(`✓ [任务 ${taskId}] 添加好友成功: ${authUser.uid} -> ${target.uid}`);
+                } else {
+                    console.log(`✗ [任务 ${taskId}] 添加好友失败: ${authUser.uid} -> ${target.uid}, 原因: ${result.message}`);
+                }
+                
+                return result;
+            } catch (error) {
+                console.error(`✗ [任务 ${taskId}] 添加好友异常:`, error);
+                return {
+                    authUid: authUser.uid,
+                    targetUid: target.uid,
+                    success: false,
+                    message: `任务执行异常: ${error instanceof Error ? error.message : String(error)}`
+                };
             }
-        });
+        })
+    );
 
-        // 批次间延迟
-        await new Promise(resolve => setTimeout(resolve, 200));
-    }
+    const results = await Promise.allSettled(promises);
+    
+    const successfulResults = results
+        .filter((result): result is PromiseFulfilledResult<ApplyResult> => 
+            result.status === 'fulfilled'
+        )
+        .map(result => result.value);
 
-    return results;
+    const successCount = successfulResults.filter(r => r.success).length;
+    console.log(`批量添加好友完成: ${successCount}/${allTasks.length} 成功`);
+    
+    return successfulResults;
 }
 
 

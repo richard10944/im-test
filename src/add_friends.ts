@@ -8,16 +8,16 @@ async function main() {
         const users = await readUserCredentialsFromExcelAsync(excelFilePath);
         // console.log('读取到的用户:', users);
 
-        const userAddFriendInfos = await batchGetUserInfo(users);
-        console.log('所有用户信息:', userAddFriendInfos);
+        const userAddFriendInfos = await batchGetUserInfo(users, 15);
+        // console.log('所有用户信息:', userAddFriendInfos);
 
         //登录前10个用户
-        const loginResults = await batchLoginFromExcel(users.slice(0, 10));
-        console.log('登录结果:', loginResults);
+        const loginResults = await batchLoginFromExcel(users.slice(0, 5),15);
+        // console.log('登录结果:', loginResults);
 
         const results = await batchAddFriendsConcurrent(loginResults, userAddFriendInfos, {
             remark: "并发添加",
-            concurrency: 20
+            concurrency: 15
         });
     } catch (error) {
         console.error('程序执行失败:', error);

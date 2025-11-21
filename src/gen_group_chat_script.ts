@@ -170,7 +170,7 @@ async function generateGroupMessageScriptsDirect(
 
         // 批量登录发送者用户
         console.log('登录发送者用户...');
-        const loginResults = await batchLoginFromExcel(senderUsers);
+        const loginResults = await batchLoginFromExcel(senderUsers,10);
         console.log(`登录成功: ${loginResults.length}/${senderUsers.length} 个用户`);
 
         if (loginResults.length === 0) {
