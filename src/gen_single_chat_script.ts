@@ -47,7 +47,7 @@ async function sendMessages() {
     while (true) {
         const text = new MessageText(randomString(500, charset));
         await WKSDK.shared().chatManager.send(text, new Channel(targetChannel, channelType));
-        await sleep(3000);
+        await sleep(5000);
     }
 }
 
