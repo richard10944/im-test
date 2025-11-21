@@ -3,7 +3,7 @@ import * as fs from 'fs';
 
 const baseUrl="http://localhost:8090/v1"
 
-const wsUrl="ws://im.localhost:5200/"
+const wsUrl="ws://localhost:5200/"
 // 定义类型
 interface UserCredentials {
     username: string;
