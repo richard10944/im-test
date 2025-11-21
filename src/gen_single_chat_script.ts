@@ -184,7 +184,7 @@ async function generateMessageScriptsDirect(
             fs.writeFileSync(filePath, scriptContent, 'utf8');
             generatedFiles.push(filePath);
 
-            console.log(`生成脚本: ${fileName} - 用户 ${(senderStartIndex + i + 1).toString().padStart(2, '0')} (${user.uid.slice(0, 8)}...) - ${scriptType}`);
+            console.log(`生成脚本: ${fileName} - 用户 ${(senderStartIndex + i + 1).toString().padStart(2, '0')} (${user.uid}...) - ${scriptType}`);
         }
 
         console.log(`成功生成 ${generatedFiles.length} 个脚本到目录: ${outputDir}`);
@@ -206,7 +206,7 @@ async function customGenerate() {
             1,   // 从第2个用户开始
             100, // 总共100个发送者
             0,   // 目标用户是第1个用户
-            10   // 新增参数：只有前30个脚本发送消息，其他70个只建立连接
+            20   // 新增参数：只有前30个脚本发送消息，其他70个只建立连接
         );
     } catch (error) {
         console.error('生成失败:', error);
