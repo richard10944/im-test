@@ -128,3 +128,5 @@ add-friends:
 	ts-node src/add_friends.ts
 gen-single:
 	ts-node src/gen_single_chat_script.ts
+gen-group:
+	ts-node src/gen_group_chat_script.ts

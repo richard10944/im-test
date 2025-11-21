@@ -12,12 +12,12 @@ async function main() {
         console.log('所有用户信息:', userAddFriendInfos);
 
         //登录前10个用户
-        const loginResults = await batchLoginFromExcel(users.slice(0, 5));
+        const loginResults = await batchLoginFromExcel(users.slice(0, 10));
         console.log('登录结果:', loginResults);
 
         const results = await batchAddFriendsConcurrent(loginResults, userAddFriendInfos, {
             remark: "并发添加",
-            concurrency: 10
+            concurrency: 20
         });
     } catch (error) {
         console.error('程序执行失败:', error);
